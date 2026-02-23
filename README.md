@@ -48,8 +48,12 @@ Binary output:
 This repo includes CI + release automation:
 
 - `CI` workflow (`.github/workflows/ci.yml`)
-  - runs on push/PR
+  - runs on push/PR (Windows runner only)
   - checks formatting, `cargo check`, `clippy`, and tests
+  - on successful `main` pushes, auto-publishes a prerelease with:
+    - `codex-launcher.exe`
+    - `codex-launcher.sha256`
+    - GitHub provenance attestation
 - `Release` workflow (`.github/workflows/release.yml`)
   - runs on tags matching `v*` (for example `v0.2.0`)
   - builds `codex-launcher.exe` on GitHub-hosted Windows runners

@@ -181,7 +181,7 @@ fn run() -> Result<()> {
                 &electron_version,
                 &better_version,
                 &pty_version,
-                &pty_arch,
+                pty_arch,
                 &bs_dst,
                 &pty_dst_pre,
                 &node_tools,
@@ -353,12 +353,11 @@ fn resolve_dmg_path(explicit: Option<&Path>) -> Result<PathBuf> {
 
     let cwd = env::current_dir().context("failed to read current directory")?;
     let mut roots = vec![cwd.clone()];
-    if let Some(name) = cwd.file_name().and_then(OsStr::to_str) {
-        if name.eq_ignore_ascii_case("codex-launcher") {
-            if let Some(parent) = cwd.parent() {
-                roots.push(parent.to_path_buf());
-            }
-        }
+    if let Some(name) = cwd.file_name().and_then(OsStr::to_str)
+        && name.eq_ignore_ascii_case("codex-launcher")
+        && let Some(parent) = cwd.parent()
+    {
+        roots.push(parent.to_path_buf());
     }
 
     for root in &roots {
@@ -641,6 +640,7 @@ fn patch_preload(app_dir: &Path) -> Result<()> {
     fs::write(&preload, patched).with_context(|| format!("failed to write {}", preload.display()))
 }
 
+#[allow(clippy::too_many_arguments)]
 fn prepare_native_modules(
     app_dir: &Path,
     native_dir: &Path,
@@ -795,6 +795,7 @@ fn prepare_native_modules(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 fn launch_codex(
     app_dir: &Path,
     native_dir: &Path,
@@ -886,13 +887,13 @@ fn resolve_codex_cli_path(explicit: Option<&Path>, npm_cmd: &Path) -> Result<Opt
             .arg(query)
             .output()
             .with_context(|| format!("failed to run where.exe {query}"));
-        if let Ok(output) = output {
-            if output.status.success() {
-                for line in String::from_utf8_lossy(&output.stdout).lines() {
-                    let clean = trim_wrapping_quotes(line.trim());
-                    if !clean.is_empty() {
-                        candidates.push(PathBuf::from(clean));
-                    }
+        if let Ok(output) = output
+            && output.status.success()
+        {
+            for line in String::from_utf8_lossy(&output.stdout).lines() {
+                let clean = trim_wrapping_quotes(line.trim());
+                if !clean.is_empty() {
+                    candidates.push(PathBuf::from(clean));
                 }
             }
         }
@@ -934,10 +935,10 @@ fn resolve_codex_cli_path(explicit: Option<&Path>, npm_cmd: &Path) -> Result<Opt
             );
 
             let modern_node_modules = npm_root.join("@openai/codex/node_modules");
-            if modern_node_modules.exists() {
-                if let Some(found) = find_modern_codex_exe(&modern_node_modules) {
-                    candidates.push(found);
-                }
+            if modern_node_modules.exists()
+                && let Some(found) = find_modern_codex_exe(&modern_node_modules)
+            {
+                candidates.push(found);
             }
         }
     }
@@ -1381,10 +1382,10 @@ fn ensure_rg_on_path() {
     .flatten()
     .find(|p| p.exists());
 
-    if let Some(exe) = candidate_exe {
-        if let Some(dir) = exe.parent() {
-            prepend_path_entry(dir);
-        }
+    if let Some(exe) = candidate_exe
+        && let Some(dir) = exe.parent()
+    {
+        prepend_path_entry(dir);
     }
 }
 

@@ -1,0 +1,6 @@
+/target/
+/work/
+/*.exe
+/codex-launcher
+.DS_Store
+Thumbs.db

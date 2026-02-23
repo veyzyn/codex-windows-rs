@@ -1,4 +1,4 @@
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{Context, Result, anyhow, bail};
 use clap::Parser;
 use indicatif::{ProgressBar, ProgressStyle};
 use regex::Regex;
@@ -13,17 +13,17 @@ use std::fs;
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, ExitStatus, Stdio};
-use std::sync::mpsc;
 use std::sync::OnceLock;
+use std::sync::mpsc;
 use std::time::Duration;
 use url::Url;
 use walkdir::WalkDir;
 use which::which;
 
 #[cfg(windows)]
-use winreg::enums::{HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE};
-#[cfg(windows)]
 use winreg::RegKey;
+#[cfg(windows)]
+use winreg::enums::{HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE};
 
 const NPM_CONFIG_KEYS: [&str; 5] = [
     "npm_config_runtime",
@@ -50,8 +50,7 @@ const PRELOAD_PROCESS_EXPOSE: &str = "const P={env:process.env,platform:process.
 const MAIN_ENV_PATCH_MARKER: &str = "/* CODEX_WINDOWS_ENV_FIX_V1 */";
 const MAIN_MPE_PATH_FIX_MARKER: &str = "/* CODEX_WINDOWS_MPE_PATH_FIX_V1 */";
 const MAIN_MPE_PATH_FIX_TARGET: &str = "e.binDirectory&&(n.PATH=_pe(n.PATH,e.binDirectory))";
-const MAIN_MPE_PATH_FIX_REPLACEMENT: &str =
-    "e.binDirectory&&(n.PATH=_pe(n.PATH??n.Path,e.binDirectory),n.Path=n.PATH/* CODEX_WINDOWS_MPE_PATH_FIX_V1 */)";
+const MAIN_MPE_PATH_FIX_REPLACEMENT: &str = "e.binDirectory&&(n.PATH=_pe(n.PATH??n.Path,e.binDirectory),n.Path=n.PATH/* CODEX_WINDOWS_MPE_PATH_FIX_V1 */)";
 const MAIN_ENV_PATCH_JS: &str = r#"(function(){if(process.platform!=="win32")return;try{const cp=require("child_process");const split=function(v){return String(v||"").split(";").map(function(s){return s.trim();}).filter(Boolean);};const expand=function(v){return String(v||"").replace(/%([^%]+)%/g,function(_,k){return process.env[k]||("%"+k+"%");}).replace(/[\\\/]+$/,"");};const add=function(arr,seen,v){const p=expand(v);if(!p)return;const key=p.toLowerCase();if(!seen.has(key)){seen.add(key);arr.push(p);}};const readReg=function(key){try{const out=cp.spawnSync("reg.exe",["query",key,"/v","Path"],{encoding:"utf8",windowsHide:true});if(out.status!==0)return[];const lines=String(out.stdout||"").split(/\r?\n/);for(const line of lines){if(!/REG_(SZ|EXPAND_SZ)/i.test(line))continue;const m=line.match(/Path\s+REG_\w+\s+(.*)$/i);if(m&&m[1])return split(m[1]);}return [];}catch{return[];}};const seen=new Set();const out=[];for(const p of split(process.env.PATH||process.env.Path||""))add(out,seen,p);for(const p of readReg("HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment"))add(out,seen,p);for(const p of readReg("HKCU\\Environment"))add(out,seen,p);const sr=process.env.SystemRoot||process.env.windir||"C:\\Windows";const extras=[sr+"\\System32",sr+"\\System32\\Wbem",sr+"\\System32\\WindowsPowerShell\\v1.0",sr+"\\System32\\OpenSSH",(process.env.LOCALAPPDATA||"")+"\\Microsoft\\WinGet\\Links",(process.env.USERPROFILE||"")+"\\.cargo\\bin",(process.env.USERPROFILE||"")+"\\scoop\\shims",(process.env.ProgramFiles||"")+"\\Git\\cmd",(process.env.ProgramFiles||"")+"\\Git\\usr\\bin",(process.env["ProgramFiles(x86)"]||"")+"\\Git\\cmd",(process.env["ProgramFiles(x86)"]||"")+"\\Git\\usr\\bin"];for(const p of extras)add(out,seen,p);if(!process.env.SystemRoot)process.env.SystemRoot=sr;if(!process.env.windir)process.env.windir=sr;if(!process.env.ComSpec)process.env.ComSpec=sr+"\\System32\\cmd.exe";if(!process.env.PATHEXT)process.env.PATHEXT=".COM;.EXE;.BAT;.CMD;.VBS;.VBE;.JS;.JSE;.WSF;.WSH;.MSC";const fixed=out.join(";");process.env.PATH=fixed;process.env.Path=fixed;}catch{}})();"#;
 
 #[derive(Debug, Parser)]
@@ -139,8 +138,12 @@ fn run() -> Result<()> {
         )?;
     }
 
-    run_step("Patching main startup env", || patch_main_bundle_env(&app_dir))?;
-    run_step("Self-testing env patch", || run_env_fix_self_test(&node_tools.node))?;
+    run_step("Patching main startup env", || {
+        patch_main_bundle_env(&app_dir)
+    })?;
+    run_step("Self-testing env patch", || {
+        run_env_fix_self_test(&node_tools.node)
+    })?;
     run_step("Patching preload", || patch_preload(&app_dir))?;
 
     let pkg: Value = run_step("Reading app metadata", || {
@@ -173,21 +176,21 @@ fn run() -> Result<()> {
     } else {
         run_step("Preparing native modules", || {
             prepare_native_modules(
-            &app_dir,
-            &native_dir,
-            &electron_version,
-            &better_version,
-            &pty_version,
-            &pty_arch,
-            &bs_dst,
-            &pty_dst_pre,
-            &node_tools,
-        )
+                &app_dir,
+                &native_dir,
+                &electron_version,
+                &better_version,
+                &pty_version,
+                &pty_arch,
+                &bs_dst,
+                &pty_dst_pre,
+                &node_tools,
+            )
         })?;
     }
 
     if !cli.no_launch {
-            let codex_cli: PathBuf = run_step("Resolving Codex CLI", || {
+        let codex_cli: PathBuf = run_step("Resolving Codex CLI", || {
             resolve_codex_cli_path(cli.codex_cli_path.as_deref(), &node_tools.npm)?
                 .ok_or_else(|| anyhow!("codex.exe not found."))
         })?;
@@ -442,7 +445,9 @@ fn resolve_7z(base_dir: Option<&Path>) -> Result<Option<PathBuf>> {
     fs::create_dir_all(&seven_zip_dir)
         .with_context(|| format!("failed to create {}", seven_zip_dir.display()))?;
 
-    let client = Client::builder().build().context("failed to build HTTP client")?;
+    let client = Client::builder()
+        .build()
+        .context("failed to build HTTP client")?;
     let html = match client.get("https://www.7-zip.org/").send() {
         Ok(resp) => resp
             .error_for_status()
@@ -547,7 +552,8 @@ fn extract_dmg_to_app(
             true,
         )?;
     } else {
-        let direct_app = extracted_dir.join("Codex Installer/Codex.app/Contents/Resources/app.asar");
+        let direct_app =
+            extracted_dir.join("Codex Installer/Codex.app/Contents/Resources/app.asar");
         if !direct_app.exists() {
             bail!("app.asar not found.");
         }
@@ -562,14 +568,16 @@ fn extract_dmg_to_app(
         }
     }
 
-    fs::create_dir_all(app_dir).with_context(|| format!("failed to create {}", app_dir.display()))?;
+    fs::create_dir_all(app_dir)
+        .with_context(|| format!("failed to create {}", app_dir.display()))?;
     let asar = electron_dir.join("Codex Installer/Codex.app/Contents/Resources/app.asar");
     if !asar.exists() {
         bail!("app.asar not found.");
     }
     run_asar_extract(&asar, app_dir, node_tools)?;
 
-    let unpacked = electron_dir.join("Codex Installer/Codex.app/Contents/Resources/app.asar.unpacked");
+    let unpacked =
+        electron_dir.join("Codex Installer/Codex.app/Contents/Resources/app.asar.unpacked");
     if unpacked.exists() {
         copy_dir_recursive(&unpacked, app_dir)?;
     }
@@ -658,7 +666,8 @@ fn prepare_native_modules(
         )?;
     }
 
-    let bs_src_probe = native_dir.join("node_modules/better-sqlite3/build/Release/better_sqlite3.node");
+    let bs_src_probe =
+        native_dir.join("node_modules/better-sqlite3/build/Release/better_sqlite3.node");
     let pty_src_probe = native_dir.join(format!("node_modules/node-pty/prebuilds/{arch}/pty.node"));
     let electron_exe = native_dir.join("node_modules/electron/dist/electron.exe");
     let have_native = bs_src_probe.exists() && pty_src_probe.exists() && electron_exe.exists();
@@ -895,19 +904,22 @@ fn resolve_codex_cli_path(explicit: Option<&Path>, npm_cmd: &Path) -> Result<Opt
         let npm_root = PathBuf::from(npm_root.trim());
         if !npm_root.as_os_str().is_empty() {
             let vendor_arch = detect_vendor_arch();
-            candidates.push(npm_root.join(format!("@openai/codex/vendor/{vendor_arch}/codex/codex.exe")));
-            candidates.push(npm_root.join("@openai/codex/vendor/x86_64-pc-windows-msvc/codex/codex.exe"));
-            candidates.push(npm_root.join("@openai/codex/vendor/aarch64-pc-windows-msvc/codex/codex.exe"));
+            candidates.push(npm_root.join(format!(
+                "@openai/codex/vendor/{vendor_arch}/codex/codex.exe"
+            )));
+            candidates
+                .push(npm_root.join("@openai/codex/vendor/x86_64-pc-windows-msvc/codex/codex.exe"));
             candidates.push(
-                npm_root
-                    .join(format!("@openai/codex/node_modules/@openai/codex-win32-x64/vendor/{vendor_arch}/cod
-          ex/codex.exe")),
+                npm_root.join("@openai/codex/vendor/aarch64-pc-windows-msvc/codex/codex.exe"),
             );
-            candidates.push(
-                npm_root
-                    .join(format!("@openai/codex/node_modules/@openai/codex-win32-arm64/vendor/{vendor_arch}/c
-          odex/codex.exe")),
-            );
+            candidates.push(npm_root.join(format!(
+                "@openai/codex/node_modules/@openai/codex-win32-x64/vendor/{vendor_arch}/cod
+          ex/codex.exe"
+            )));
+            candidates.push(npm_root.join(format!(
+                "@openai/codex/node_modules/@openai/codex-win32-arm64/vendor/{vendor_arch}/c
+          odex/codex.exe"
+            )));
             candidates.push(
                 npm_root.join(
                     "@openai/codex/node_modules/@openai/codex-win32-x64/vendor/x86_64-pc-windows-msvc/codex/co
@@ -1030,7 +1042,12 @@ fn patch_main_bundle_env(app_dir: &Path) -> Result<()> {
         let inject = format!("{}{}\n", MAIN_ENV_PATCH_MARKER, MAIN_ENV_PATCH_JS);
         patched = if let Some(idx) = patched.find("\"use strict\";") {
             let insert_at = idx + "\"use strict\";".len();
-            format!("{}{}{}", &patched[..insert_at], inject, &patched[insert_at..])
+            format!(
+                "{}{}{}",
+                &patched[..insert_at],
+                inject,
+                &patched[insert_at..]
+            )
         } else {
             format!("{inject}{patched}")
         };
@@ -1038,11 +1055,7 @@ fn patch_main_bundle_env(app_dir: &Path) -> Result<()> {
 
     if !already_mpe_patched {
         if patched.contains(MAIN_MPE_PATH_FIX_TARGET) {
-            patched = patched.replacen(
-                MAIN_MPE_PATH_FIX_TARGET,
-                MAIN_MPE_PATH_FIX_REPLACEMENT,
-                1,
-            );
+            patched = patched.replacen(MAIN_MPE_PATH_FIX_TARGET, MAIN_MPE_PATH_FIX_REPLACEMENT, 1);
         } else {
             bail!(
                 "main bundle signature mismatch for mpe PATH fix (sha256: {}) in {}",
@@ -1107,7 +1120,10 @@ fn find_main_bundle_path(app_dir: &Path) -> Result<PathBuf> {
 
 fn run_env_fix_self_test(node_exe: &Path) -> Result<()> {
     if !node_exe.exists() {
-        bail!("node executable not found for env self-test: {}", node_exe.display());
+        bail!(
+            "node executable not found for env self-test: {}",
+            node_exe.display()
+        );
     }
 
     let user_root = env::var_os("USERPROFILE")
@@ -1237,14 +1253,23 @@ fn repair_process_environment(extra_path_entries: &[String]) {
         .or_else(|| env::var("windir").ok().filter(|v| !v.trim().is_empty()))
         .unwrap_or_else(|| "C:\\Windows".to_owned());
     set_env_var("SystemRoot", &system_root);
-    if env::var("windir").map(|v| v.trim().is_empty()).unwrap_or(true) {
+    if env::var("windir")
+        .map(|v| v.trim().is_empty())
+        .unwrap_or(true)
+    {
         set_env_var("windir", &system_root);
     }
-    if env::var("ComSpec").map(|v| v.trim().is_empty()).unwrap_or(true) {
+    if env::var("ComSpec")
+        .map(|v| v.trim().is_empty())
+        .unwrap_or(true)
+    {
         let cmd = PathBuf::from(&system_root).join("System32/cmd.exe");
         set_env_var("ComSpec", cmd);
     }
-    if env::var("PATHEXT").map(|v| v.trim().is_empty()).unwrap_or(true) {
+    if env::var("PATHEXT")
+        .map(|v| v.trim().is_empty())
+        .unwrap_or(true)
+    {
         set_env_var("PATHEXT", DEFAULT_PATHEXT);
     }
 
@@ -1290,8 +1315,18 @@ fn repair_process_environment(extra_path_entries: &[String]) {
     }
     if let Some(user_profile) = env::var_os("USERPROFILE") {
         let user_profile = PathBuf::from(user_profile);
-        path_candidates.push(user_profile.join(".cargo/bin").to_string_lossy().to_string());
-        path_candidates.push(user_profile.join("scoop/shims").to_string_lossy().to_string());
+        path_candidates.push(
+            user_profile
+                .join(".cargo/bin")
+                .to_string_lossy()
+                .to_string(),
+        );
+        path_candidates.push(
+            user_profile
+                .join("scoop/shims")
+                .to_string_lossy()
+                .to_string(),
+        );
     }
     if let Some(program_files) = env::var_os("ProgramFiles") {
         let pf = PathBuf::from(program_files);
@@ -1418,7 +1453,12 @@ fn expand_env_variables(input: &str) -> String {
         let key = caps.get(1).map(|m| m.as_str()).unwrap_or_default();
         match env::var(key) {
             Ok(v) => Cow::Owned(v),
-            Err(_) => Cow::Owned(caps.get(0).map(|m| m.as_str()).unwrap_or_default().to_owned()),
+            Err(_) => Cow::Owned(
+                caps.get(0)
+                    .map(|m| m.as_str())
+                    .unwrap_or_default()
+                    .to_owned(),
+            ),
         }
     })
     .to_string()
@@ -1651,7 +1691,8 @@ fn run_7z_with_progress(command: &mut Command, label: &str, tolerate_non_zero: b
 
 fn parse_percent(line: &str) -> Option<u64> {
     static PERCENT_RE: OnceLock<Regex> = OnceLock::new();
-    let re = PERCENT_RE.get_or_init(|| Regex::new(r"(^|[^0-9])(100|[1-9]?[0-9])%").expect("valid regex"));
+    let re = PERCENT_RE
+        .get_or_init(|| Regex::new(r"(^|[^0-9])(100|[1-9]?[0-9])%").expect("valid regex"));
     re.captures(line)
         .and_then(|caps| caps.get(2))
         .and_then(|m| m.as_str().parse::<u64>().ok())

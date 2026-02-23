@@ -43,3 +43,22 @@ Binary output:
 
 `target\release\codex-launcher.exe`
 
+## GitHub Actions
+
+This repo includes CI + release automation:
+
+- `CI` workflow (`.github/workflows/ci.yml`)
+  - runs on push/PR
+  - checks formatting, `cargo check`, `clippy`, and tests
+- `Release` workflow (`.github/workflows/release.yml`)
+  - runs on tags matching `v*` (for example `v0.2.0`)
+  - builds `codex-launcher.exe` on GitHub-hosted Windows runners
+  - uploads `.exe` + `.sha256` to GitHub Releases
+  - emits a GitHub provenance attestation for release artifacts
+
+To publish a new release from source on GitHub:
+
+```powershell
+git tag v0.2.0
+git push origin v0.2.0
+```

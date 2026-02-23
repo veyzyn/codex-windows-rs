@@ -76,12 +76,12 @@ jobs:
             dist/codex-launcher.exe
             dist/codex-launcher.sha256
 
-      - name: Publish CI prerelease
+      - name: Publish CI release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ci-${{ github.sha }}
           name: CI build ${{ github.sha }}
-          prerelease: true
+          prerelease: false
           make_latest: false
           files: |
             dist/codex-launcher.exe
